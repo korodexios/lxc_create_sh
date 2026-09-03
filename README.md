@@ -1,68 +1,84 @@
-# 📂 Linux Shell Scripts Collection
+# 📂 Proxmox LXC Modular Automation
 
-Welcome to the `scripts_sh` directory. This folder contains various automation scripts designed for Linux administration, specifically tailored for **Proxmox VE** environments and general DevOps tasks.
+Collection of Bash scripts to rapidly, securely, and modularly provision Linux Containers (LXC) on **Proxmox VE 8/9**, with optional automated deployments of **Docker** and **Portainer CE**.
+
+## ✨ Key Features
+
+*   **🧠 Smart Defaults & Persistence:** Remembers your configurations (usernames, resources, storage) in a local `.lxc_defaults` file. Next time, just press `Enter`.
+*   **👤 Optional User Creation:** By default, it creates only `root`. If you specify a username (or a list of users), accounts are generated with `sudo` and SSH access automatically.
+*   **🧩 Modular Architecture:** Run via an interactive menu, or call standalone modules directly (`lxc_create_base.sh`, `lxc_install_docker.sh`) for CI/CD and AI Agent automation.
+*   **📦 Clean Standards:** Portainer CE is deployed to `/opt/portainer` (independent of user existence), and the container time zone is automatically synchronized from the Proxmox host.
+*   **🔒 Security & Git Ready:** Automatic SSH public key injection. Built-in `.gitignore` rules prevent accidentally committing private/public keys and credentials.
+
+---
 
 ## 🚀 Getting Started
 
-To use these scripts, follow the steps below to ensure they are downloaded and executed correctly.
-
-### 1. Clone the repository
-If you haven't already, clone this repository to your local machine:
+### 1. Clone the repository to your Proxmox Host
+Log in via SSH as `root` and clone your repo:
 ```bash
-https://github.com/korodexios/lxc_create_sh.git
-cd lxc_create_sh
+git clone https://github.com/your-username/your-repo-name.git
+cd your-repo-name
 ```
 
 ### 2. Set Permissions
-By default, scripts might not have execution permissions. Grant them using `chmod`:
+Grant execution permissions to all scripts:
 ```bash
-chmod +x 0_lxc_create.sh  all-lxc-update.sh  create_lxc_docker_portainer.sh lxc_create_base.sh  lxc_install_docker.sh  lxc_install_portainer.sh  lxc_module_validation.sh
+chmod +x *.sh
 ```
-*(Repeat for any other script you wish to run.)*
 
 ### 3. Execution
-Run the scripts with root or sudo privileges (required for system-level changes):
+Run the interactive menu:
 ```bash
-sudo ./0_lxc_create.sh
+./0_lxc_create.sh
 ```
 
 ---
 
-## 🛠 Featured Script: Proxmox LXC Super Script
+## 🛠 Script Overview
 
-The main highlight of this folder is the **Proxmox LXC Super Script**. It provides an interactive menu to deploy Linux Containers (LXC) quickly and efficiently.
-
-**Key Features:**
-*   **Menu-Driven:** Easy-to-use CLI interface.
-*   **Pre-flight Checks:** Verifies root access and Proxmox version.
-*   **Automated Setup:** Handles package updates, locale configuration, and user creation.
-*   **Software Stack:** Optional one-click installation of **Docker** and **Portainer CE**.
-*   **SSD Optimization:** Automatically sets up `fstrim` cron jobs.
+| Script Name | Purpose |
+| :--- | :--- |
+| `0_lxc_create.sh` | **Main Menu.** Interactive wrapper prompting for configuration and calling sub-modules. |
+| `lxc_create_base.sh` | Creates barebone LXC, sets up optional user(s), locales, and host-matched timezone. |
+| `lxc_install_docker.sh` | Installs Docker Engine & Docker Compose inside an existing Debian/Ubuntu LXC. |
+| `lxc_install_portainer.sh` | Deploys Portainer CE mapped to `/opt/portainer`. |
+| `all-lxc-update.sh` | Safely updates all running/stopped Debian/Ubuntu LXCs with automatic snapshot rotation. |
+| `lxc_module_validation.sh` | Parameter validator (CTID, Hostname) used by the creation scripts. |
 
 ---
 
-## ⚙️ Customization
+## 🤖 AI / Non-Interactive Automation
 
-If you need to change default settings (such as default storage, RAM, or usernames), you can easily edit the variables at the beginning of each script:
+You can bypass the interactive menu entirely by exporting environment variables and executing the base scripts:
 
 ```bash
-nano 0_lxc_create.sh
-```
+# Example: Automated container setup
+export LXC_ROOTFS_STORAGE="local-lvm"
+export LXC_ROOTFS_SIZE="8"
+export LXC_CORES="2"
+export LXC_MEMORY="2048"
+export LXC_USER="kleo"              # Leave unset or empty to keep only root
+export LXC_EXTRA_USERS="admin,dev"  # Optional extra users
+export LXC_PASS="SuperSecretPass123"
 
-Look for the section labeled `# --- Default configuration inputs ---` and modify the values to match your infrastructure.
+./lxc_create_base.sh 105 "my-app" "debian-12"
+./lxc_install_docker.sh 105
+./lxc_install_portainer.sh 105
+```
 
 ---
 
-## ⚠️ Security Warning
+## ⚠️ Security Notice
 
-*   **Root Access:** These scripts perform high-level system changes. Always review the source code before running them.
-*   **Passwords:** The scripts use default passwords for initial setup. **Change your root and user passwords immediately** after the script finishes.
-*   **SSH Keys:** It is highly recommended to use the SSH key integration for better security.
+*   **Passwords:** Always update default passwords inside the container immediately after creation:
+    ```bash
+    pct enter <CTID>
+    passwd root
+    ```
+*   **SSH Public Key:** Drop your `id_ed25519.pub` or `id_rsa.pub` into this directory. It will be copied into root (and new users), but `.gitignore` prevents pushing it to GitHub.
 
 ---
 
 ## 📝 License
-Feel free to use, modify, and distribute these scripts for your personal or professional projects.
-
-**Author:** korodexios & Gemini
-**Last Updated:** 2024-08-02
+MIT License. Free to use and modify for personal and production environments.
