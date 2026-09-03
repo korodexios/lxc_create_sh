@@ -58,7 +58,7 @@ export LXC_ROOTFS_STORAGE="local-lvm"
 export LXC_ROOTFS_SIZE="8"
 export LXC_CORES="2"
 export LXC_MEMORY="2048"
-export LXC_USER="kleo"              # Leave unset or empty to keep only root
+export LXC_USER="user"              # Leave unset or empty to keep only root
 export LXC_EXTRA_USERS="admin,dev"  # Optional extra users
 export LXC_PASS="SuperSecretPass123"
 
