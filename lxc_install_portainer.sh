@@ -1,6 +1,6 @@
 #!/bin/bash
 # ===============================================================================
-# LXC Portainer Installation Script — Derelien Project
+# LXC Portainer Installation Script
 # Installs Portainer CE inside an existing LXC with Docker
 #
 # Usage: bash /root/scripts/lxc_install_portainer.sh <ctid>
@@ -42,19 +42,21 @@ install_portainer() {
         return 1
     fi
 
-    # Get username from LXC config
-    user=$(pct config "$ctid" 2>/dev/null | grep -A1 "ssh-public-keys" | tail -1 | awk -F/ '{print $NF}' || echo "user")
+    # Get username from LXC config description or UID 1000
+    user=$(pct config "$ctid" 2>/dev/null | grep -oP '(?<=primary_user=)[a-zA-Z0-9_-]+' || true)
+    if [[ -z "$user" ]]; then
+        user=$(pct exec "$ctid" -- awk -F: '$3 == 1000 {print $1}' /etc/passwd || echo "root")
+    fi
 
-    echo "Installing Portainer for user: $user"
+    echo "Setting up Portainer..."
 
-    # Install Portainer
+    # Install Portainer do systémovej zložky /opt (Standard Best Practice)
     echo -e "${BLUE}Installing Portainer CE (version: $PORTAINER_VERSION)...${RESET}"
     pct exec "$ctid" -- bash -c "
         set -e
 
         # Create directory
-        mkdir -p /home/$user/docker/portainer
-        chown $user:$user /home/$user/docker /home/$user/docker/portainer
+        mkdir -p /opt/portainer
 
         # Run Portainer (pull always to ensure latest for the chosen tag)
         docker run -d \\
@@ -64,7 +66,7 @@ install_portainer() {
             --name=portainer \\
             --restart=always \\
             -v /var/run/docker.sock:/var/run/docker.sock \\
-            -v /home/$user/docker/portainer:/data \\
+            -v /opt/portainer:/data \\
             portainer/portainer-ce:$PORTAINER_VERSION
     "
 
