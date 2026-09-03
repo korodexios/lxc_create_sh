@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ===============================================================================
-# Proxmox LXC Creation Menu — Derelien Project
+# Proxmox LXC Creation Menu
 # User-friendly menu that CALLS modular scripts (does NOT create LXC itself)
 # 
 # Location: /root/scripts/00_cr_lxc_docker_portainer.sh
@@ -24,16 +24,35 @@ RESET='\e[0m'
 
 separator() { echo -e "${CYAN}-----------------------------------------------------${RESET}"; }
 
-# --- Defaults ---
-DEFAULT_ROOTFS_STORAGE="local-lvm"
-DEFAULT_ROOTFS_SIZE=4
-DEFAULT_CORES=2
-DEFAULT_MEMORY=2048
-DEFAULT_USER="user"
-DEFAULT_PASS="123456"
-DEFAULT_BRIDGE="vmbr0"
+# --- Defaults & State Persistence ---
+CONFIG_FILE="$SCRIPT_DIR/.lxc_defaults"
+if [[ -f "$CONFIG_FILE" ]]; then
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+fi
+
+DEFAULT_ROOTFS_STORAGE="${SAVED_ROOTFS_STORAGE:-local-lvm}"
+DEFAULT_ROOTFS_SIZE="${SAVED_ROOTFS_SIZE:-4}"
+DEFAULT_CORES="${SAVED_CORES:-2}"
+DEFAULT_MEMORY="${SAVED_MEMORY:-2048}"
+DEFAULT_USER="${SAVED_USER:-}"
+DEFAULT_EXTRA_USERS="${SAVED_EXTRA_USERS:-}"
+DEFAULT_PASS="${SAVED_PASS:-123456}"
+DEFAULT_BRIDGE="${SAVED_BRIDGE:-vmbr0}"
 DEFAULT_UNPRIVILEGED=1
 DEFAULT_SSH_KEY="$SCRIPT_DIR/id_ed25519.pub"
+
+save_defaults() {
+    cat <<EOF > "$CONFIG_FILE"
+SAVED_ROOTFS_STORAGE="$ROOTFS_STORAGE"
+SAVED_ROOTFS_SIZE="$ROOTFS_SIZE"
+SAVED_CORES="$CORES"
+SAVED_MEMORY="$MEMORY"
+SAVED_USER="$USER"
+SAVED_EXTRA_USERS="$EXTRA_USERS"
+SAVED_BRIDGE="$BRIDGE"
+EOF
+}
 
 # --- Validation Functions ---
 validate_ctid() {
@@ -172,11 +191,27 @@ if [[ "$CHOICE" == "1" || "$CHOICE" == "2" || "$CHOICE" == "3" ]]; then
     read -p "$(echo -e "${MAGENTA}Network bridge (default: ${BOLD}$DEFAULT_BRIDGE${RESET}${MAGENTA}): ${RESET}")" BRIDGE_INPUT
     BRIDGE=${BRIDGE_INPUT:-$DEFAULT_BRIDGE}
     
-    read -p "$(echo -e "${MAGENTA}Username (default: ${BOLD}$DEFAULT_USER${RESET}${MAGENTA}): ${RESET}")" USER_INPUT
-    USER=${USER_INPUT:-$DEFAULT_USER}
+    # Logic for optional user
+    if [[ -n "$DEFAULT_USER" ]]; then
+        read -p "$(echo -e "${MAGENTA}Primary Username (default: ${BOLD}$DEFAULT_USER${RESET}${MAGENTA}, type 'none' to skip): ${RESET}")" USER_INPUT
+        if [[ "$USER_INPUT" == "none" ]]; then
+            USER=""
+        else
+            USER=${USER_INPUT:-$DEFAULT_USER}
+        fi
+    else
+        read -p "$(echo -e "${MAGENTA}Primary Username (leave empty to skip): ${RESET}")" USER
+    fi
+
+    # Only ask for extra users & passwords if primary user or extra users exist
+    read -p "$(echo -e "${MAGENTA}Extra users (comma-separated, empty to skip) [${BOLD}$DEFAULT_EXTRA_USERS${RESET}${MAGENTA}]: ${RESET}")" EXTRA_USERS_INPUT
+    EXTRA_USERS=${EXTRA_USERS_INPUT:-$DEFAULT_EXTRA_USERS}
     
-    read -p "$(echo -e "${MAGENTA}Password (default: ${BOLD}$DEFAULT_PASS${RESET}${MAGENTA}): ${RESET}")" PASS_INPUT
+    read -p "$(echo -e "${MAGENTA}Password for users (default: ${BOLD}$DEFAULT_PASS${RESET}${MAGENTA}): ${RESET}")" PASS_INPUT
     PASS=${PASS_INPUT:-$DEFAULT_PASS}
+
+    # Save selected values as defaults for future runs
+    save_defaults
     
     # Unprivileged
     read -p "$(echo -e "${MAGENTA}Create Unprivileged container? [Y/n] (default: Y): ${RESET}")" UNPRIV_REPLY
@@ -222,6 +257,7 @@ if [[ "$CHOICE" == "1" || "$CHOICE" == "2" || "$CHOICE" == "3" ]]; then
     export LXC_CORES="$CORES"
     export LXC_MEMORY="$MEMORY"
     export LXC_USER="$USER"
+    export LXC_EXTRA_USERS="$EXTRA_USERS"
     export LXC_PASS="$PASS"
     export LXC_SSH_KEY="$SSH_KEY"
     export LXC_BRIDGE="$BRIDGE"
