@@ -1,6 +1,6 @@
 #!/bin/bash
 # ===============================================================================
-# LXC Base Creation Script — Derelien Project
+# LXC Base Creation Script
 # Creates basic LXC container (no Docker, no Portainer)
 #
 # Usage: bash /root/scripts/lxc_create_base.sh <ctid> <hostname> [template]
@@ -26,6 +26,7 @@ DEFAULT_CORES="${LXC_CORES:-2}"
 DEFAULT_MEMORY="${LXC_MEMORY:-2048}"
 DEFAULT_SWAP=0
 DEFAULT_USER="${LXC_USER:-user}"
+DEFAULT_EXTRA_USERS="${LXC_EXTRA_USERS:-}"
 DEFAULT_PASS="${LXC_PASS:-123456}"
 DEFAULT_BRIDGE="${LXC_BRIDGE:-vmbr0}"
 DEFAULT_UNPRIVILEGED=1
@@ -108,6 +109,7 @@ create_base_lxc() {
         --hostname "$hostname" \
         --net0 "name=eth0,bridge=$DEFAULT_BRIDGE,ip=dhcp,type=veth" \
         --features "nesting=1" \
+        --description "primary_user=$DEFAULT_USER" \
         --start true
     
     if [[ -f "$DEFAULT_SSH_KEY" ]]; then
@@ -126,12 +128,14 @@ create_base_lxc() {
         pct exec "$ctid" -- bash -c "cat >> /root/.ssh/authorized_keys" < "$DEFAULT_SSH_KEY"
     fi
     
-    # Timezone setup (LXC shares host clock — cannot run NTP daemon in unprivileged container)
-    echo -e "${BLUE}Setting timezone to Europe/Bratislava...${RESET}"
+    # Získanie časovej zóny priamo z Proxmox hostitela
+    HOST_TZ=$(cat /etc/timezone 2>/dev/null || echo "Europe/Bratislava")
+    
+    # Timezone setup (LXC shares host clock)
+    echo -e "${BLUE}Setting timezone to $HOST_TZ...${RESET}"
     pct exec "$ctid" -- bash -c "
-        # Set timezone via file (timedatectl requires privileges we don't have in LXC)
-        echo 'Europe/Bratislava' > /etc/timezone
-        ln -sf /usr/share/zoneinfo/Europe/Bratislava /etc/localtime
+        echo '$HOST_TZ' > /etc/timezone
+        ln -sf /usr/share/zoneinfo/$HOST_TZ /etc/localtime
 
         # Verify
         echo 'Current time:'
@@ -156,25 +160,48 @@ create_base_lxc() {
         apt-get upgrade -y
         apt-get install -y sudo curl wget vim nano htop net-tools locales
 
-        # Create user (fail loudly if this goes wrong)
-        if ! id \"$DEFAULT_USER\" &>/dev/null; then
-            useradd -m -s /bin/bash \"$DEFAULT_USER\"
-            echo \"User '$DEFAULT_USER' created successfully\"
-        else
-            echo \"User '$DEFAULT_USER' already exists\"
-        fi
-        echo \"$DEFAULT_USER:$DEFAULT_PASS\" | chpasswd
-        usermod -aG sudo \"$DEFAULT_USER\"
+        # Helper funkcia na vytvorenie používateľa a nastavenie SSH
+        create_account() {
+            local u="\$1"
+            if ! id "\$u" &>/dev/null; then
+                useradd -m -s /bin/bash "\$u"
+                echo "User '\$u' created successfully"
+            fi
+            echo "\$u:$DEFAULT_PASS" | chpasswd
+            usermod -aG sudo "\$u"
 
-        # Copy SSH key for user
-        if [ -f /root/.ssh/authorized_keys ]; then
-            mkdir -p /home/$DEFAULT_USER/.ssh
-            cp /root/.ssh/authorized_keys /home/$DEFAULT_USER/.ssh/authorized_keys
-            chown -R $DEFAULT_USER:$DEFAULT_USER /home/$DEFAULT_USER/.ssh
-            chmod 700 /home/$DEFAULT_USER/.ssh
-            chmod 600 /home/$DEFAULT_USER/.ssh/authorized_keys
+            if [ -f /root/.ssh/authorized_keys ]; then
+                mkdir -p "/home/\$u/.ssh"
+                cp /root/.ssh/authorized_keys "/home/\$u/.ssh/authorized_keys"
+                chown -R "\$u:\$u" "/home/\$u/.ssh"
+                chmod 700 "/home/\$u/.ssh"
+                chmod 600 "/home/\$u/.ssh/authorized_keys"
+            fi
+        }
+
+        # Create primary user only if defined
+        if [[ -n "$DEFAULT_USER" ]]; then
+            create_account "$DEFAULT_USER"
+        fi
+
+        # Create extra users if defined
+        if [[ -n "$DEFAULT_EXTRA_USERS" ]]; then
+            IFS=',' read -ra EXTRAS <<< "$DEFAULT_EXTRA_USERS"
+            for extra in "\${EXTRAS[@]}"; do
+                extra=\$(echo "\$extra" | tr -d ' ')
+                if [[ -n "\$extra" ]]; then
+                    create_account "\$extra"
+                fi
+            done
         fi
     "
+    
+    # Nastavíme description kontajnera v Proxmoxe pre ďalšie skripty
+    if [[ -n "$DEFAULT_USER" ]]; then
+        pct set "$ctid" --description "primary_user=$DEFAULT_USER"
+    else
+        pct set "$ctid" --description "primary_user=root"
+    fi
 
     # Verify user was created properly
     echo -e "${BLUE}Verifying user '$DEFAULT_USER'...${RESET}"
