@@ -1,6 +1,6 @@
 #!/bin/bash
 # ===============================================================================
-# LXC Docker Installation Script — Derelien Project
+# LXC Docker Installation Script
 # Installs Docker inside an existing LXC container
 #
 # Usage: bash /root/scripts/lxc_install_docker.sh <ctid>
@@ -74,10 +74,13 @@ install_docker() {
         echo 'Docker installed successfully'
     "
 
-    # Add user to docker group (extract from LXC config, fallback to 'user')
+    # Add user to docker group (extract from description or fallback to first UID 1000)
     local user
-    user=$(pct config "$ctid" 2>/dev/null | grep -A1 "ssh-public-keys" | tail -1 | awk -F/ '{print $NF}' || echo "user")
-    pct exec "$ctid" -- bash -c "usermod -aG docker $user 2>/dev/null || true"
+    user=$(pct config "$ctid" 2>/dev/null | grep -oP '(?<=primary_user=)[a-zA-Z0-9_-]+' || true)
+    if [[ -z "$user" ]]; then
+        user=$(pct exec "$ctid" -- awk -F: '$3 == 1000 {print $1}' /etc/passwd || echo "root")
+    fi
+    pct exec "$ctid" -- bash -c "id -u $user &>/dev/null && usermod -aG docker $user || true"
 
     # Verify Docker is running
     echo -e "${BLUE}Verifying Docker...${RESET}"
