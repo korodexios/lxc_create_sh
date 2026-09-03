@@ -15,10 +15,10 @@ Collection of Bash scripts to rapidly, securely, and modularly provision Linux C
 ## 🚀 Getting Started
 
 ### 1. Clone the repository to your Proxmox Host
-Log in via SSH as `root` and clone your repo:
+Log in via SSH as `root` and clone repo:
 ```bash
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/korodexios/lxc_create_sh.git
+cd lxc_create_sh
 ```
 
 ### 2. Set Permissions
