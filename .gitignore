@@ -1,0 +1,16 @@
+# SSH Keys (NIKDY nenahrávať na GitHub!)
+id_*
+*.pub
+*.pem
+*.key
+
+# Lokálne nastavenia a uložené defaulty (obsahujú heslá a mená)
+.lxc_defaults
+*.env
+config.local
+
+# Dočasné súbory a zálohy
+*.log
+*.tmp
+*.bak
+.DS_Store
